@@ -34,7 +34,7 @@ jobs:
       matrix:
         include:
           - platform: linux
-            os: ubuntu-26.04
+            os: ubuntu-24.04
           - platform: macos
             os: macos-latest
           - platform: windows
