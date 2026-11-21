@@ -1,5 +1,8 @@
 # Hashman
 
+> [!CAUTION]
+> This is WIP software, not recommended for use yet.
+
 Small desktop app (Windows / macOS / Linux) with two buttons:
 
 - **Generate**: select a folder, the tool generates and writes `MANIFEST.sha256` into it.
