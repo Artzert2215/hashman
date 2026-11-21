@@ -13,19 +13,48 @@ Validation and generation may take a long time depending on file size, disk spee
 
 ## Build locally
 
-Prerequisites: [Rust](https://rustup.rs), plus the Tauri system dependencies for your OS (https://tauri.app/start/prerequisites/).
+### Core (headless)
 
 ```bash
-cargo install tauri-cli --version "^2" --locked
-cargo tauri icon app-icon.png     # one-time: generates src-tauri/icons/* from app-icon.png
-cargo tauri dev                   # run in dev mode
-cargo tauri build                 # installers land in src-tauri/target/release/bundle/
+cargo build        # builds the hashing lib + CLI-less stub
+cargo test         # runs the hashing unit tests + the headless UI render test
 ```
 
-Run the core tests (no GUI libraries needed beyond Tauri's normal build deps):
+No display or X11/Wayland libraries are needed for this.
+
+### Windowed app (egui/eframe)
+
+Requires egui's native backend deps for your OS:
+
+- **Linux**: X11/Wayland dev libs
+  `libgtk-3-dev libxkbcommon-dev librsvg2-dev libwebp-dev`.
+  ```bash
+  cargo build --features gui --release
+  ./target/release/hashman
+  ```
+- **macOS**: just Xcode (Cocoa is linked by eframe).
+  ```bash
+  cargo build --features gui --release
+  ./target/release/hashman
+  ```
+- **Windows**: MSVC toolchain (default on GitHub Actions / MSVC).
+  ```bash
+  cargo build --features gui --release
+  target\x86_64-pc-windows-msvc\release\hashman.exe
+  ```
+
+## Running the tests
 
 ```bash
-cd src-tauri && cargo test
+cargo test          # hashing + headless UI render test (egui_kittest)
+cargo test --lib    # lib only
+cargo test --tests  # also the main.rs (gui-feature) tests
 ```
 
+## Release builds
 
+| Platform | Artifact |
+|----------|----------|
+| macOS    | universal `.dmg` |
+| Linux    | `.AppImage` |
+| Windows  | `.msi` (MSI) + `.exe` (self-extracting) |
