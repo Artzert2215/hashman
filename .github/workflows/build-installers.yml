@@ -120,30 +120,30 @@ jobs:
           mkdir -p flatpak-source
           cp target/release/hashman flatpak-source/hashman
           convert assets/app-icon.png -resize 256x256 flatpak-source/hashman.png
-          cat > flatpak-source/org.hashman.Hashman.desktop <<'DESKTOP'
+          cat > flatpak-source/org.artzert.Hashman.desktop <<'DESKTOP'
           [Desktop Entry]
           Type=Application
           Name=Hashman
           Comment=Generate and validate SHA-256 folder manifests
           Exec=hashman
-          Icon=org.hashman.Hashman
+          Icon=org.artzert.Hashman
           Categories=Utility;FileTools;
           Terminal=false
           DESKTOP
-          cat > flatpak-source/org.hashman.Hashman.metainfo.xml <<'META'
+          cat > flatpak-source/org.artzert.Hashman.metainfo.xml <<'META'
           <?xml version="1.0" encoding="UTF-8"?>
           <component type="desktop-application">
-            <id>org.hashman.Hashman</id>
+            <id>org.artzert.Hashman</id>
             <name>Hashman</name>
             <summary>Generate and validate SHA-256 folder manifests</summary>
             <metadata_license>CC0-1.0</metadata_license>
             <project_license>LicenseRef-proprietary</project_license>
             <description><p>Generate and validate SHA-256 manifests for folders.</p></description>
-            <launchable type="desktop-id">org.hashman.Hashman.desktop</launchable>
+            <launchable type="desktop-id">org.artzert.Hashman.desktop</launchable>
           </component>
           META
-          cat > org.hashman.Hashman.yml <<'MANIFEST'
-          app-id: org.hashman.Hashman
+          cat > org.artzert.Hashman.yml <<'MANIFEST'
+          app-id: org.artzert.Hashman
           runtime: org.freedesktop.Platform
           runtime-version: '24.08'
           sdk: org.freedesktop.Sdk
@@ -158,17 +158,17 @@ jobs:
               buildsystem: simple
               build-commands:
                 - install -Dm755 hashman /app/bin/hashman
-                - install -Dm644 org.hashman.Hashman.desktop /app/share/applications/org.hashman.Hashman.desktop
-                - install -Dm644 org.hashman.Hashman.metainfo.xml /app/share/metainfo/org.hashman.Hashman.metainfo.xml
-                - install -Dm644 hashman.png /app/share/icons/hicolor/256x256/apps/org.hashman.Hashman.png
+                - install -Dm644 org.artzert.Hashman.desktop /app/share/applications/org.artzert.Hashman.desktop
+                - install -Dm644 org.artzert.Hashman.metainfo.xml /app/share/metainfo/org.artzert.Hashman.metainfo.xml
+                - install -Dm644 hashman.png /app/share/icons/hicolor/256x256/apps/org.artzert.Hashman.png
               sources:
                 - type: dir
                   path: flatpak-source
           MANIFEST
           sudo flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install --system --noninteractive -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
-          flatpak-builder --force-clean --repo=flatpak-repo flatpak-build org.hashman.Hashman.yml
-          flatpak build-bundle flatpak-repo dist/Hashman.flatpak org.hashman.Hashman stable
+          flatpak-builder --force-clean --repo=flatpak-repo flatpak-build org.artzert.Hashman.yml
+          flatpak build-bundle flatpak-repo dist/Hashman.flatpak org.artzert.Hashman stable
 
       # macOS -----------------------------------------------------------------
       - name: Build macOS universal binaries
@@ -203,7 +203,7 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>CFBundleExecutable</key><string>Hashman</string>
-            <key>CFBundleIdentifier</key><string>org.hashman.Hashman</string>
+            <key>CFBundleIdentifier</key><string>org.artzert.Hashman</string>
             <key>CFBundleName</key><string>Hashman</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleIconFile</key><string>Hashman</string>

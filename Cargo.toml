@@ -2,14 +2,8 @@
 name = "hashman"
 version = "1.0.0"
 edition = "2021"
-description = "Generate and validate SHA-256 manifests for folders (egui port of the Tauri app)"
+description = "Generate and validate SHA-256 manifests for folders"
 
-# The binary (src/main.rs) refers to the library as `hashman_egui`.
-[lib]
-name = "hashman_egui"
-path = "src/lib.rs"
-
-# Core: pure egui + hashing — builds on a headless machine (no display needed).
 [dependencies]
 egui = "0.37"
 egui-file-dialog = "0.16"
@@ -18,7 +12,6 @@ rayon = "1"
 walkdir = "2"
 serde = { version = "1", features = ["derive"] }
 eframe = { version = "0.37", optional = true }
-# Linux GUI folder selection uses the XDG Desktop Portal (Flatpak-friendly).
 rfd = { version = "0.15.4", optional = true, default-features = false, features = ["xdg-portal", "async-std"] }
 
 [features]
@@ -31,6 +24,6 @@ lto = true
 codegen-units = 1
 strip = true
 
-# Headless UI testing (pure egui, no X11/Wayland required).
+# Headless UI testing.
 [dev-dependencies]
 egui_kittest = "0.37"

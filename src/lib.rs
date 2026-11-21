@@ -1,9 +1,3 @@
-//! Hashman — egui port of the Tauri app.
-//!
-//! Pure `egui` (no windowing) so the lib and its tests build on a headless
-//! machine. The `main.rs` binary (behind the `gui` feature) adds the
-//! `eframe` windowing runtime.
-
 pub mod manifest;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -38,7 +32,6 @@ impl JobState {
         Self {
             total: AtomicU64::new(total),
             done: AtomicU64::new(0),
-            // Idle by default; a job flips this to `true` and clears it when done.
             running: AtomicBool::new(false),
             error: Mutex::new(None),
             result: Mutex::new(None),
@@ -46,7 +39,7 @@ impl JobState {
     }
 }
 
-/// Human-friendly file-size formatting, matching the original UI's `gb()`.
+/// Human-friendly file-size formatting
 fn gb(n: u64) -> String {
     let v = n as f64 / 1e9;
     if n >= 10_000_000_000 {
@@ -59,7 +52,6 @@ fn gb(n: u64) -> String {
 /// The Hashman application.
 pub struct App {
     file_dialog: FileDialog,
-    /// Result channel for the native XDG portal folder picker on Linux.
     #[cfg(all(target_os = "linux", feature = "gui"))]
     portal_pick: Option<Receiver<Option<std::path::PathBuf>>>,
     folder: Option<String>,
@@ -67,7 +59,6 @@ pub struct App {
     job: Arc<JobState>,
     started: bool,
     t0: Option<Instant>,
-    /// Mode chosen by the user; the job starts once a folder has been picked.
     pending: Option<Mode>,
 }
 
@@ -122,8 +113,7 @@ impl App {
             };
             let p = Path::new(&folder);
 
-            // Total bytes for the progress bar's denominator. Done here, not on
-            // the UI thread, so a huge folder doesn't freeze the window.
+            // Total bytes for the progress bar's denominator.
             let total = manifest::list_files(p).iter().map(|(_, s)| *s).sum::<u64>();
             js.total.store(total, Ordering::Relaxed);
 
@@ -153,9 +143,6 @@ impl App {
 
     /// Render the whole UI.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        // Linux GUI builds use the native XDG Desktop Portal folder picker.
-        // Its Document Portal grant exposes the selected folder without a
-        // broad --filesystem=home or --filesystem=host Flatpak permission.
         #[cfg(all(target_os = "linux", feature = "gui"))]
         {
             let picked = self.portal_pick.as_ref().and_then(|rx| match rx.try_recv() {
@@ -176,7 +163,6 @@ impl App {
             }
         }
 
-        // Keep the egui-drawn picker on Windows/macOS and in headless tests.
         #[cfg(not(all(target_os = "linux", feature = "gui")))]
         {
             self.file_dialog.update(ui);
@@ -369,8 +355,7 @@ mod tests {
         assert_eq!(gb(10_500_000_000), "10.5 GB");
     }
 
-    /// Headless UI validation via `egui_kittest`: the App renders into a mock
-    /// (AccessKit-backed) context with no window/display at all.
+    /// Headless UI validation via egui_kittest
     #[test]
     fn ui_renders_headlessly() {
         use egui_kittest::kittest::Queryable;
@@ -379,13 +364,8 @@ mod tests {
         let mut harness = egui_kittest::Harness::new_ui(move |ui: &mut egui::Ui| {
             app.ui(ui);
         });
-        // The accessibility check runs on every `run()` and panics if an input
-        // widget lacks an accessible name; this asserts it passes for our UI.
         harness.run();
 
-        // `query_by_label` returns None (no panic) when nothing matches, so
-        // each `.is_some()` is an assertion that the widget is present and
-        // has the expected accessible label in the headless tree.
         assert!(
             harness.query_by_label("Generate").is_some(),
             "Generate button missing"

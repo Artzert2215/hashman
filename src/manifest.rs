@@ -1,5 +1,3 @@
-//! Core hashing logic. No Tauri/egui dependency, so it can be tested on its own.
-
 use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -30,8 +28,7 @@ pub enum JobResult {
     },
 }
 
-/// All files under `root` as (relative path with '/' separators, size), sorted,
-/// excluding the manifest itself.
+/// All files under `root` as (relative path with '/' separators, size), sorted, excluding the manifest itself.
 pub fn list_files(root: &Path) -> Vec<(String, u64)> {
     let mut out = Vec::new();
     for e in WalkDir::new(root)
@@ -204,10 +201,7 @@ mod tests {
 
         generate(&d, 2, &noop).unwrap();
         let m = fs::read_to_string(d.join(MANIFEST)).unwrap();
-        // SHA-256("abc") is a well-known test vector
-        assert!(m.contains(
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  a.txt"
-        ));
+        assert!(m.contains("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  a.txt"));
         assert!(m.contains("  sub dir/b.bin"));
         assert!(!m.contains(MANIFEST));
 
