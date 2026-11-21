@@ -1,4 +1,4 @@
-//! Core hashing logic. No Tauri dependency, so it can be tested on its own.
+//! Core hashing logic. No Tauri/egui dependency, so it can be tested on its own.
 
 use rayon::prelude::*;
 use serde::Serialize;

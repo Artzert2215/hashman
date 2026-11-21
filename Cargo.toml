@@ -1,0 +1,29 @@
+[package]
+name = "hashman"
+version = "1.0.0"
+edition = "2021"
+description = "Generate and validate SHA-256 manifests for folders (egui port of the Tauri app)"
+
+# Core: pure egui + hashing — builds on a headless machine (no display needed).
+[dependencies]
+egui = "0.37"
+egui-file-dialog = "0.16"
+sha2 = "0.10"
+rayon = "1"
+walkdir = "2"
+serde = { version = "1", features = ["derive"] }
+eframe = { version = "0.37", optional = true }
+
+[features]
+default = ["gui"]
+gui = ["eframe"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Headless UI testing (pure egui, no X11/Wayland required).
+[dev-dependencies]
+egui_kittest = "0.37"
