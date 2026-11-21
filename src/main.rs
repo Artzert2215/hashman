@@ -1,17 +1,19 @@
 // Hashman — eframe desktop binary (behind the `gui` feature).
 //
-// Creates a window and drives the headless `hashman_egui::App` inside a
-// central panel. On a headless machine (no X11/Wayland) the `gui` feature is
-// off, and only this empty `main` is produced, so the lib still builds.
+// The icon is embedded at compile time so the native window/task switcher
+// uses the same artwork as the platform installers.
 
 #[cfg(feature = "gui")]
 fn main() -> eframe::Result<()> {
-    // `ViewportBuilder` lives in `egui` (re-exported as `eframe::egui`), and
-    // `NativeOptions` is a plain struct with a public `viewport` field.
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/app-icon.png"))
+        .unwrap_or_default();
+
     let opts = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([580.0, 560.0])
-            .with_min_inner_size([460.0, 420.0]),
+            .with_min_inner_size([460.0, 420.0])
+            .with_app_id("org.hashman.Hashman")
+            .with_icon(icon),
         ..Default::default()
     };
 
@@ -34,8 +36,6 @@ impl Shell {
 
 #[cfg(feature = "gui")]
 impl eframe::App for Shell {
-    // In eframe 0.37 `App::ui` already receives the root `Ui` (there is no
-    // `Frame::context()` any more), and panels are shown directly inside it.
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
         eframe::egui::CentralPanel::default().show(ui, |ui| {
             self.app.ui(ui);
@@ -46,6 +46,6 @@ impl eframe::App for Shell {
 #[cfg(not(feature = "gui"))]
 fn main() {
     println!(
-        "Hashman core built without the GUI. Build with `--features gui` (requires X11/Wayland) to get the window."
+        "Hashman core built without the GUI. Build with `--features gui` to get the window."
     );
 }

@@ -7,8 +7,7 @@ name: Build installers
 #   Linux   -> hashman-linux.tar.gz (binary + non-core shared libs)
 #   Windows -> hashman-windows.zip (hashman.exe + any DLLs)
 #
-# Each build job uploads one artifact; a final `release` job publishes them all
-# in a single call so the jobs can't race to create the release.
+# Each build job uploads one artifact; a final `release` job publishes them all in a single call so the jobs can't race to create the release.
 
 on:
   push:

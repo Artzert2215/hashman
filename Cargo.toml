@@ -18,10 +18,12 @@ rayon = "1"
 walkdir = "2"
 serde = { version = "1", features = ["derive"] }
 eframe = { version = "0.37", optional = true }
+# Linux GUI folder selection uses the XDG Desktop Portal (Flatpak-friendly).
+rfd = { version = "0.15.4", optional = true, default-features = false, features = ["xdg-portal", "async-std"] }
 
 [features]
 default = ["gui"]
-gui = ["eframe"]
+gui = ["eframe", "rfd"]
 
 [profile.release]
 opt-level = 3

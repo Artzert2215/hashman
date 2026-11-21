@@ -10,6 +10,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+#[cfg(all(target_os = "linux", feature = "gui"))]
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Instant;
 
@@ -57,6 +59,9 @@ fn gb(n: u64) -> String {
 /// The Hashman application.
 pub struct App {
     file_dialog: FileDialog,
+    /// Result channel for the native XDG portal folder picker on Linux.
+    #[cfg(all(target_os = "linux", feature = "gui"))]
+    portal_pick: Option<Receiver<Option<std::path::PathBuf>>>,
     folder: Option<String>,
     workers: u32,
     job: Arc<JobState>,
@@ -76,6 +81,8 @@ impl App {
     pub fn new() -> Self {
         Self {
             file_dialog: FileDialog::new(),
+            #[cfg(all(target_os = "linux", feature = "gui"))]
+            portal_pick: None,
             folder: None,
             workers: 4,
             job: Arc::new(JobState::new(0)),
@@ -146,13 +153,38 @@ impl App {
 
     /// Render the whole UI.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        // Render the file dialog (a window above this UI) and consume a pick.
-        self.file_dialog.update(ui);
-        if let Some(path) = self.file_dialog.take_picked() {
-            self.folder = Some(path.to_string_lossy().to_string());
-            // The folder was picked on behalf of Generate/Validate: run it now.
-            if let Some(mode) = self.pending.take() {
-                self.start_job(ui, mode);
+        // Linux GUI builds use the native XDG Desktop Portal folder picker.
+        // Its Document Portal grant exposes the selected folder without a
+        // broad --filesystem=home or --filesystem=host Flatpak permission.
+        #[cfg(all(target_os = "linux", feature = "gui"))]
+        {
+            let picked = self.portal_pick.as_ref().and_then(|rx| match rx.try_recv() {
+                Ok(path) => Some(path),
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
+            });
+            if let Some(path) = picked {
+                self.portal_pick = None;
+                if let Some(path) = path {
+                    self.folder = Some(path.to_string_lossy().to_string());
+                    if let Some(mode) = self.pending.take() {
+                        self.start_job(ui, mode);
+                    }
+                } else {
+                    self.pending = None;
+                }
+            }
+        }
+
+        // Keep the egui-drawn picker on Windows/macOS and in headless tests.
+        #[cfg(not(all(target_os = "linux", feature = "gui")))]
+        {
+            self.file_dialog.update(ui);
+            if let Some(path) = self.file_dialog.take_picked() {
+                self.folder = Some(path.to_string_lossy().to_string());
+                if let Some(mode) = self.pending.take() {
+                    self.start_job(ui, mode);
+                }
             }
         }
 
@@ -179,6 +211,19 @@ impl App {
         if let Some(m) = run {
             // Ask for the folder first; `start_job` runs once it is picked.
             self.pending = Some(m);
+            #[cfg(all(target_os = "linux", feature = "gui"))]
+            {
+                let (tx, rx) = mpsc::channel();
+                self.portal_pick = Some(rx);
+                // Run the synchronous portal picker off the UI thread.
+                thread::spawn(move || {
+                    let selected = rfd::FileDialog::new()
+                        .set_title("Choose a folder to hash")
+                        .pick_folder();
+                    let _ = tx.send(selected);
+                });
+            }
+            #[cfg(not(all(target_os = "linux", feature = "gui")))]
             self.file_dialog.pick_directory();
         }
         ui.add_space(8.0);
