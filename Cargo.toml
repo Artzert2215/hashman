@@ -4,6 +4,11 @@ version = "1.0.0"
 edition = "2021"
 description = "Generate and validate SHA-256 manifests for folders (egui port of the Tauri app)"
 
+# The binary (src/main.rs) refers to the library as `hashman_egui`.
+[lib]
+name = "hashman_egui"
+path = "src/lib.rs"
+
 # Core: pure egui + hashing — builds on a headless machine (no display needed).
 [dependencies]
 egui = "0.37"

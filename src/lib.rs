@@ -6,14 +6,15 @@
 
 pub mod manifest;
 
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-use manifest::JobResult;
 use egui_file_dialog::FileDialog;
+use manifest::JobResult;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
@@ -45,8 +46,6 @@ impl JobState {
 
 /// Human-friendly file-size formatting, matching the original UI's `gb()`.
 fn gb(n: u64) -> String {
-    // This Rust build's `format!` has no `f` format trait, so use precision
-    // without an explicit trait (works for floats).
     let v = n as f64 / 1e9;
     if n >= 10_000_000_000 {
         format!("{:.1} GB", v)
@@ -63,8 +62,8 @@ pub struct App {
     job: Arc<JobState>,
     started: bool,
     t0: Option<Instant>,
-    last_done: u64,
-    last_speed: Option<f64>,
+    /// Mode chosen by the user; the job starts once a folder has been picked.
+    pending: Option<Mode>,
 }
 
 impl Default for App {
@@ -82,8 +81,7 @@ impl App {
             job: Arc::new(JobState::new(0)),
             started: false,
             t0: None,
-            last_done: 0,
-            last_speed: None,
+            pending: None,
         }
     }
 
@@ -101,40 +99,40 @@ impl App {
             return;
         }
 
-        // Total bytes, computed once up front so the progress bar has a denominator.
-        let total = manifest::list_files(path)
-            .iter()
-            .map(|(_, s)| *s)
-            .sum::<u64>();
-
-        self.job = Arc::new(JobState::new(total));
+        self.job = Arc::new(JobState::new(0));
         // Mark it running so the UI shows progress and repaints each frame.
         self.job.running.store(true, Ordering::Release);
         self.started = true;
         self.t0 = Some(Instant::now());
-        self.last_done = 0;
-        self.last_speed = None;
 
         let js = Arc::clone(&self.job);
         let folder = folder.clone();
+        let ctx = ui.ctx().clone();
         thread::spawn(move || {
             // Shared borrow only: `fetch_add` takes `&self` on the atomic.
-            // (A `move` closure here would take ownership of `js` and block
-            // the later `.result`/`.error` writes below.)
             let on_bytes = |n: u64| {
                 js.done.fetch_add(n, Ordering::Relaxed);
             };
             let p = Path::new(&folder);
-            let res = match mode {
+
+            // Total bytes for the progress bar's denominator. Done here, not on
+            // the UI thread, so a huge folder doesn't freeze the window.
+            let total = manifest::list_files(p).iter().map(|(_, s)| *s).sum::<u64>();
+            js.total.store(total, Ordering::Relaxed);
+
+            // A panic in a worker must not leave the UI stuck on "running".
+            let res = catch_unwind(AssertUnwindSafe(|| match mode {
                 Mode::Generate => manifest::generate(p, workers, &on_bytes),
                 Mode::Validate => manifest::validate(p, workers, &on_bytes),
-            };
+            }));
             match res {
-                Ok(r) => *js.result.lock().unwrap() = Some(r),
-                Err(e) => *js.error.lock().unwrap() = Some(e.to_string()),
+                Ok(Ok(r)) => *js.result.lock().unwrap() = Some(r),
+                Ok(Err(e)) => *js.error.lock().unwrap() = Some(e.to_string()),
+                Err(_) => *js.error.lock().unwrap() = Some("Internal error while hashing.".into()),
             }
             // Result/error are written first; Release makes them visible to the UI.
             js.running.store(false, Ordering::Release);
+            ctx.request_repaint();
         });
         ui.request_repaint();
     }
@@ -152,6 +150,10 @@ impl App {
         self.file_dialog.update(ui);
         if let Some(path) = self.file_dialog.take_picked() {
             self.folder = Some(path.to_string_lossy().to_string());
+            // The folder was picked on behalf of Generate/Validate: run it now.
+            if let Some(mode) = self.pending.take() {
+                self.start_job(ui, mode);
+            }
         }
 
         ui.add_space(12.0);
@@ -175,7 +177,9 @@ impl App {
             }
         });
         if let Some(m) = run {
-            self.start_job(ui, m);
+            // Ask for the folder first; `start_job` runs once it is picked.
+            self.pending = Some(m);
+            self.file_dialog.pick_directory();
         }
         ui.add_space(8.0);
 
@@ -210,21 +214,13 @@ impl App {
             } else {
                 0.0
             };
-            ui.add(
-                egui::ProgressBar::new(f)
-                    .text(format!("{} / {}", gb(done), gb(total))),
-            );
+            ui.add(egui::ProgressBar::new(f).text(format!("{} / {}", gb(done), gb(total))));
 
             if let Some(t0) = self.t0 {
                 let secs = t0.elapsed().as_secs_f64();
-                if secs > 1.0 && done > self.last_done {
-                    let delta = (done - self.last_done) as f64;
-                    self.last_speed = Some(delta / secs);
+                if secs > 1.0 && done > 0 {
+                    ui.label(format!("{:.1} MB/s", done as f64 / secs / 1e6));
                 }
-                self.last_done = done;
-            }
-            if let Some(speed) = self.last_speed {
-                ui.label(format!("{speed:.1} MB/s"));
             }
             ui.add_space(6.0);
             ui.request_repaint();
@@ -233,7 +229,16 @@ impl App {
         // --- Result ----------------------------------------------------------------------
         if !running && self.started {
             ui.add_space(8.0);
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    self.show_result(ui);
+                });
+        }
+    }
 
+    fn show_result(&self, ui: &mut egui::Ui) {
+        {
             if let Some(e) = self.job.error.lock().unwrap().as_ref() {
                 ui.label(format!("Error: {}", e));
                 ui.add_space(10.0);
@@ -326,10 +331,9 @@ mod tests {
         use egui_kittest::kittest::Queryable;
 
         let mut app = App::new();
-        let mut harness =
-            egui_kittest::Harness::new_ui(move |ui: &mut egui::Ui| {
-                app.ui(ui);
-            });
+        let mut harness = egui_kittest::Harness::new_ui(move |ui: &mut egui::Ui| {
+            app.ui(ui);
+        });
         // The accessibility check runs on every `run()` and panics if an input
         // widget lacks an accessible name; this asserts it passes for our UI.
         harness.run();
@@ -337,8 +341,17 @@ mod tests {
         // `query_by_label` returns None (no panic) when nothing matches, so
         // each `.is_some()` is an assertion that the widget is present and
         // has the expected accessible label in the headless tree.
-        assert!(harness.query_by_label("Generate").is_some(), "Generate button missing");
-        assert!(harness.query_by_label("Validate").is_some(), "Validate button missing");
-        assert!(harness.query_by_label("Hashman").is_some(), "app title missing");
+        assert!(
+            harness.query_by_label("Generate").is_some(),
+            "Generate button missing"
+        );
+        assert!(
+            harness.query_by_label("Validate").is_some(),
+            "Validate button missing"
+        );
+        assert!(
+            harness.query_by_label("Hashman").is_some(),
+            "app title missing"
+        );
     }
 }

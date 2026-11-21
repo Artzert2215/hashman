@@ -48,7 +48,7 @@ Requires egui's native backend deps for your OS:
 ```bash
 cargo test          # hashing + headless UI render test (egui_kittest)
 cargo test --lib    # lib only
-cargo test --tests  # also the main.rs (gui-feature) tests
+cargo test --features gui  # also type-checks main.rs
 ```
 
 ## Release builds
@@ -56,5 +56,5 @@ cargo test --tests  # also the main.rs (gui-feature) tests
 | Platform | Artifact |
 |----------|----------|
 | macOS    | universal `.dmg` |
-| Linux    | `.AppImage` |
-| Windows  | `.msi` (MSI) + `.exe` (self-extracting) |
+| Linux    | `hashman-linux.tar.gz` (binary + bundled shared libs) |
+| Windows  | `hashman-windows.zip` (`hashman.exe`) |

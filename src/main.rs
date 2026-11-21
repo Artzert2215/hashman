@@ -6,17 +6,16 @@
 
 #[cfg(feature = "gui")]
 fn main() -> eframe::Result<()> {
-    let opts = eframe::NativeOptions::default().with_viewport(
-        eframe::ViewportBuilder::default()
+    // `ViewportBuilder` lives in `egui` (re-exported as `eframe::egui`), and
+    // `NativeOptions` is a plain struct with a public `viewport` field.
+    let opts = eframe::NativeOptions {
+        viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([580.0, 560.0])
             .with_min_inner_size([460.0, 420.0]),
-    );
+        ..Default::default()
+    };
 
-    eframe::run_native(
-        "Hashman",
-        opts,
-        Box::new(|_cc| Ok(Box::new(Shell::new()))),
-    )
+    eframe::run_native("Hashman", opts, Box::new(|_cc| Ok(Box::new(Shell::new()))))
 }
 
 #[cfg(feature = "gui")]
@@ -35,8 +34,10 @@ impl Shell {
 
 #[cfg(feature = "gui")]
 impl eframe::App for Shell {
-    fn ui(&mut self, _ui: &mut eframe::egui::Ui, frame: &mut eframe::Frame) {
-        eframe::egui::CentralPanel::default().show(frame.context(), |ui| {
+    // In eframe 0.37 `App::ui` already receives the root `Ui` (there is no
+    // `Frame::context()` any more), and panels are shown directly inside it.
+    fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
+        eframe::egui::CentralPanel::default().show(ui, |ui| {
             self.app.ui(ui);
         });
     }
