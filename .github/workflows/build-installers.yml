@@ -167,8 +167,8 @@ jobs:
           MANIFEST
           sudo flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install --system --noninteractive -y flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
-          flatpak-builder --force-clean --repo=flatpak-repo flatpak-build org.artzert.Hashman.yml
-          flatpak build-bundle flatpak-repo dist/Hashman.flatpak org.artzert.Hashman stable
+          flatpak-builder --force-clean --repo=.flatpak-builder/repo  flatpak-build org.artzert.Hashman.yml
+          flatpak build-bundle .flatpak-builder/repo  dist/Hashman.flatpak org.artzert.Hashman stable
 
       # macOS -----------------------------------------------------------------
       - name: Build macOS universal binaries
