@@ -168,6 +168,7 @@ jobs:
           sudo flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install --system --noninteractive -y flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
           flatpak-builder --force-clean --repo=.flatpak-builder/repo  flatpak-build org.artzert.Hashman.yml
+          flatpak build-update-repo --generate-static-deltas .flatpak-builder/repo
           flatpak build-bundle .flatpak-builder/repo  dist/Hashman.flatpak org.artzert.Hashman stable
 
       # macOS -----------------------------------------------------------------
@@ -299,7 +300,7 @@ jobs:
         run: ls -lh dist/
 
       - name: Upload platform artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hashman-${{ matrix.platform }}
           path: dist/*
