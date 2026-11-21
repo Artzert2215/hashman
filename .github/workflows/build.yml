@@ -1,15 +1,14 @@
 name: Build installers
 
 # Builds the windowed egui/eframe app into a native bundle per platform and
-# publishes it to a GitHub Release on `v*` tag. The headless test suite runs on
-# every push.
+# publishes it to a GitHub Release on `v*` tag.
 #
 #   macOS   -> Hashman.dmg (universal x86_64 + arm64)
-#   Linux   -> hashman-linux.tar.gz (self-contained binary + shared libs)
-#   Windows -> hashman-windows.zip (hashman.exe + its DLLs)
+#   Linux   -> hashman-linux.tar.gz (binary + non-core shared libs)
+#   Windows -> hashman-windows.zip (hashman.exe + any DLLs)
 #
-# Each job produces exactly the one artifact it packages, so the release upload
-# never references a file another platform didn't make.
+# Each build job uploads one artifact; a final `release` job publishes them all
+# in a single call so the jobs can't race to create the release.
 
 on:
   push:
@@ -19,37 +18,35 @@ on:
 permissions:
   contents: write
 
-env:
-  CARGO_HOME: ~/.cargo
-  RUSTUP_HOME: ~/.rustup
-
 jobs:
   # Headless test suite (hashing unit tests + egui_kittest UI render).
-  # No display or X11/Wayland libraries needed.
   test:
     name: test (headless)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: swabinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "."
       - run: cargo test --no-default-features
 
-  # Build + package the windowed app. `--features gui` enables eframe.
   build:
     name: ${{ matrix.os_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        - os: ubuntu-latest
-          os_name: linux
-        - os: macos-latest
-          os_name: macos
-        - os: windows-latest
-          os_name: windows
+        include:
+          - os: ubuntu-latest
+            os_name: linux
+            artifact: hashman-linux.tar.gz
+          - os: macos-latest
+            os_name: macos
+            artifact: Hashman.dmg
+          - os: windows-latest
+            os_name: windows
+            artifact: hashman-windows.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -59,11 +56,10 @@ jobs:
           # Two macOS targets so we can lipo a universal binary.
           targets: ${{ matrix.os_name == 'macos' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
 
-      - uses: swabinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "."
 
-      # eframe (gtk backend) build deps + virtual display for Linux.
       - name: Linux system libraries
         if: matrix.os_name == 'linux'
         run: |
@@ -71,9 +67,9 @@ jobs:
           sudo apt-get install -y \
             libgtk-3-dev libxkbcommon-dev libx11-dev \
             librsvg2-dev libwebp-dev libxext-dev libxrender-dev \
-            xvfb xorg-dev patchelf
+            xorg-dev patchelf
 
-      # Per-platform build (each on its own runner shell).
+      # --- Builds ------------------------------------------------------------------
       - name: Build (Linux)
         if: matrix.os_name == 'linux'
         run: cargo build --features gui --release
@@ -91,10 +87,12 @@ jobs:
         shell: pwsh
         run: cargo build --features gui --release --target x86_64-pc-windows-msvc
 
-      # --- macOS: universal binary -> .app -> .dmg --------------------------------
+      # --- macOS: universal binary -> .app -> .dmg ---------------------------------
       - name: Package macOS .app
         if: matrix.os_name == 'macos'
         shell: bash
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
         run: |
           set -euo pipefail
           APP=Hashman.app
@@ -111,30 +109,26 @@ jobs:
               <key>CFBundleExecutable</key><string>Hashman</string>
               <key>CFBundleIdentifier</key><string>com.hashman.app</string>
               <key>CFBundleName</key><string>Hashman</string>
-              <key>CFBundleShortDescription</key><string>SHA-256 manifest generator</string>
               <key>CFBundlePackageType</key><string>APPL</string>
               <key>CFBundleVersion</key><string>1.0.0</string>
-              <key>CFBundleMinimumSystemVersion</key><string>10.15.0</string>
-              <key>CFBundleSupportedPlatforms</key>
-                <array><string>macOS</string></array>
+              <key>CFBundleShortVersionString</key><string>1.0.0</string>
+              <key>LSMinimumSystemVersion</key><string>10.15</string>
+              <key>NSHighResolutionCapable</key><true/>
             </dict>
           </plist>
+          EOF
           # Sign only when an identity is available; unsigned is fine to inspect.
-          if [ -n "${CODESIGN_IDENTITY:-}" ] && codesign --help >/dev/null 2>&1; then
-            codesign --force --deep --verify=false \
-              -identity "$CODESIGN_IDENTITY" "$APP"
+          if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+            codesign --force --deep --sign "$CODESIGN_IDENTITY" "$APP"
           fi
           echo "built $APP"
 
       - name: Package macOS .dmg
         if: matrix.os_name == 'macos'
-        uses: jasonmayes/create-dmg@v3
-        with:
-          file: Hashman.app
-          dmg_name: Hashman.dmg
-          dmg_volume_name: Hashman
+        run: |
+          hdiutil create -volname Hashman -srcfolder Hashman.app -ov -format UDZO Hashman.dmg
 
-      # --- Linux: self-contained bundle (binary + shared libs) --------------------
+      # --- Linux: binary + shared libs (excluding core system libs) ---------------
       - name: Package Linux bundle
         if: matrix.os_name == 'linux'
         run: |
@@ -143,22 +137,21 @@ jobs:
           mkdir -p "$STAGE/bin" "$STAGE/lib"
           cp target/release/hashman "$STAGE/bin/"
 
-          # Collect every shared lib the binary needs (ldd lists direct deps) and
-          # copy them flat into $STAGE/lib.
+          # Copy needed shared libs, but never libc/loader/etc: bundling those
+          # breaks the binary on other distros.
           while read -r lib; do
-            [ -n "$lib" ] || continue
             [ -f "$lib" ] || continue
             cp "$lib" "$STAGE/lib/"
-          done < <(ldd target/release/hashman | sed -n 's/.* => //p' | sort -u)
+          done < <(ldd target/release/hashman | awk '/=> \//{print $3}' \
+                   | grep -Ev '/(libc|libm|libdl|libpthread|librt|libgcc_s|ld-linux[^/]*)\.so' | sort -u)
 
-          # $ORIGIN is resolved by the runtime loader relative to the binary,
-          # so the bundle works wherever it is extracted.
+          # $ORIGIN is resolved by the runtime loader relative to the binary.
           patchelf --set-rpath '$ORIGIN/../lib' "$STAGE/bin/hashman"
 
-          tar --warning=no-timestamp -cf hashman-linux.tar.gz "$STAGE"
+          tar -czf hashman-linux.tar.gz "$STAGE"
           ls -lh hashman-linux.tar.gz
 
-      # --- Windows: exe + its DLLs in a zip ----------------------------------------
+      # --- Windows: exe (+ any DLLs) in a zip --------------------------------------
       - name: Package Windows bundle
         if: matrix.os_name == 'windows'
         shell: pwsh
@@ -166,31 +159,35 @@ jobs:
           $b = "target\x86_64-pc-windows-msvc\release"
           New-Item -ItemType Directory -Force -Path "hashman-windows" | Out-Null
           Copy-Item "$b\hashman.exe" "hashman-windows\"
-          # eframe links MSVC runtime / GDI DLLs; copy every .dll in the release
-          # dir so the bundle runs standalone.
-          Get-ChildItem "$b\*.dll" | ForEach-Object {
+          Get-ChildItem "$b\*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item $_.FullName "hashman-windows\"
           }
           Compress-Archive -Path "hashman-windows" -DestinationPath "hashman-windows.zip"
           Remove-Item -Recurse "hashman-windows"
-          Get-Item hashman-windows.zip | Select-Object -ExpandProperty Length
 
-      # Upload only the artifact THIS platform produced (exactly one file).
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hashman-${{ matrix.os_name }}-${{ github.ref_name }}
-          path: ${{ matrix.os_name == 'macos' && 'Hashman.dmg' || matrix.os_name == 'linux' && 'hashman-linux.tar.gz' || 'hashman-windows.zip' }}
+          name: hashman-${{ matrix.os_name }}
+          path: ${{ matrix.artifact }}
           if-no-files-found: error
 
-      # Publish to the tag's release (draft so it needs a human to finalize).
-      - name: Upload to release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+  # Publish once, after every platform has built.
+  release:
+    name: publish release
+    needs: [test, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          body: |
-            ## ${{ matrix.os_name }}
+          pattern: hashman-*
+          merge-multiple: true
+          path: dist
+
+      - run: ls -lh dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
           draft: true
-          prerelease: ${{ github.event_name == 'workflow_dispatch' || '' }}
-          files: ${{ matrix.os_name == 'macos' && 'Hashman.dmg' || matrix.os_name == 'linux' && 'hashman-linux.tar.gz' || 'hashman-windows.zip' }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          files: dist/*
