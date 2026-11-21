@@ -112,65 +112,6 @@ jobs:
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool.AppImage AppDir dist/Hashman-x86_64.AppImage
           chmod +x dist/Hashman-x86_64.AppImage
 
-      - name: Package Flatpak bundle
-        if: matrix.platform == 'linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p flatpak-source
-          cp target/release/hashman flatpak-source/hashman
-          convert assets/app-icon.png -resize 256x256 flatpak-source/hashman.png
-          cat > flatpak-source/org.artzert.Hashman.desktop <<'DESKTOP'
-          [Desktop Entry]
-          Type=Application
-          Name=Hashman
-          Comment=Generate and validate SHA-256 folder manifests
-          Exec=hashman
-          Icon=org.artzert.Hashman
-          Categories=Utility;FileTools;
-          Terminal=false
-          DESKTOP
-          cat > flatpak-source/org.artzert.Hashman.metainfo.xml <<'META'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <component type="desktop-application">
-            <id>org.artzert.Hashman</id>
-            <name>Hashman</name>
-            <summary>Generate and validate SHA-256 folder manifests</summary>
-            <metadata_license>CC0-1.0</metadata_license>
-            <project_license>LicenseRef-proprietary</project_license>
-            <description><p>Generate and validate SHA-256 manifests for folders.</p></description>
-            <launchable type="desktop-id">org.artzert.Hashman.desktop</launchable>
-          </component>
-          META
-          cat > org.artzert.Hashman.yml <<'MANIFEST'
-          app-id: org.artzert.Hashman
-          runtime: org.freedesktop.Platform
-          runtime-version: '26.08'
-          sdk: org.freedesktop.Sdk
-          command: hashman
-          finish-args:
-            - --share=ipc
-            - --socket=x11
-            - --socket=wayland
-            - --device=dri
-          modules:
-            - name: hashman
-              buildsystem: simple
-              build-commands:
-                - install -Dm755 hashman /app/bin/hashman
-                - install -Dm644 org.artzert.Hashman.desktop /app/share/applications/org.artzert.Hashman.desktop
-                - install -Dm644 org.artzert.Hashman.metainfo.xml /app/share/metainfo/org.artzert.Hashman.metainfo.xml
-                - install -Dm644 hashman.png /app/share/icons/hicolor/256x256/apps/org.artzert.Hashman.png
-              sources:
-                - type: dir
-                  path: flatpak-source
-          MANIFEST
-          sudo flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install --system --noninteractive -y flathub org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
-          flatpak-builder --force-clean --repo=.flatpak-builder/repo  flatpak-build org.artzert.Hashman.yml
-          flatpak build-update-repo --generate-static-deltas .flatpak-builder/repo
-          flatpak build-bundle .flatpak-builder/repo  dist/Hashman.flatpak org.artzert.Hashman stable
-
       # macOS -----------------------------------------------------------------
       - name: Build macOS universal binaries
         if: matrix.platform == 'macos'
@@ -323,7 +264,6 @@ jobs:
           set -euo pipefail
           ls -lh dist/
           test -f dist/Hashman-x86_64.AppImage
-          test -f dist/Hashman.flatpak
           test -f dist/Hashman.dmg
           test -f dist/Hashman.msi
           test -f dist/Hashman-Setup.exe
