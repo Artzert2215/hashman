@@ -20,7 +20,7 @@ jobs:
     name: Headless tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --no-default-features
@@ -34,14 +34,14 @@ jobs:
       matrix:
         include:
           - platform: linux
-            os: ubuntu-22.04
+            os: ubuntu-26.04
           - platform: macos
             os: macos-latest
           - platform: windows
             os: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Determine package version
         id: version
@@ -145,7 +145,7 @@ jobs:
           cat > org.artzert.Hashman.yml <<'MANIFEST'
           app-id: org.artzert.Hashman
           runtime: org.freedesktop.Platform
-          runtime-version: '24.08'
+          runtime-version: '26.08'
           sdk: org.freedesktop.Sdk
           command: hashman
           finish-args:
@@ -272,7 +272,7 @@ jobs:
           AppId={{8E5C8F49-9A1D-4A2B-9F72-4D8A1E6B5C10}
           AppName={#AppName}
           AppVersion={#AppVersion}
-          AppPublisher=Hashman
+          AppPublisher=Artzert
           DefaultDirName={autopf}\Hashman
           DefaultGroupName=Hashman
           OutputDir=dist
