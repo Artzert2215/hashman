@@ -7,7 +7,6 @@ pkgs.mkShell {
 	pkg-config
 	patchelf
 	imagemagick
-	gtk3
 	libx11
 	libxext
 	libxrender
@@ -15,5 +14,7 @@ pkgs.mkShell {
 	wayland
 	mesa
 	vulkan-loader
+	rustfmt
+	clippy
   ];
 }

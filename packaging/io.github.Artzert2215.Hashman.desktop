@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Hashman
+GenericName=Folder checksum tool
+Comment=Generate and validate SHA-256 manifests for folders
+Exec=hashman
+Icon=io.github.Artzert2215.Hashman
+Categories=Utility;FileTools;
+Keywords=sha256;checksum;hash;manifest;integrity;verify;
+Terminal=false
+StartupNotify=true

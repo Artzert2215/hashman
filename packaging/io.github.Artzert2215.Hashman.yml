@@ -1,0 +1,50 @@
+# Builds Hashman from source inside the Flatpak sandbox (offline, from Cargo.lock).
+#
+# Needs a generated cargo-sources.json next to this file:
+#   packaging/scripts/flatpak-prepare.sh        (CI does this automatically)
+#
+# Local build:
+#   flatpak-builder --user --install --force-clean --install-deps-from=flathub \
+#       build-dir packaging/flatpak/io.github.Artzert2215.Hashman.yml
+#   flatpak run io.github.Artzert2215.Hashman
+app-id: io.github.Artzert2215.Hashman
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: hashman
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # No --filesystem permission on purpose: the folder is chosen through the
+  # xdg-desktop-portal file chooser (rfd's `xdg-portal` backend), which grants
+  # access to just that folder.
+
+modules:
+  - name: hashman
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/hashman/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo --offline build --release --locked --features gui
+      - install -Dm755 target/release/hashman /app/bin/hashman
+      - install -Dm644 packaging/linux/io.github.Artzert2215.Hashman.desktop -t /app/share/applications/
+      - install -Dm644 packaging/linux/io.github.Artzert2215.Hashman.metainfo.xml -t /app/share/metainfo/
+      - install -Dm644 packaging/linux/io.github.Artzert2215.Hashman.png -t /app/share/icons/hicolor/256x256/apps/
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - .git
+          - .direnv
+          - .flatpak-builder
+          - build-dir
+      - cargo-sources.json

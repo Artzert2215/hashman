@@ -1,6 +1,7 @@
 #[cfg(feature = "gui")]
 fn main() -> eframe::Result<()> {
-    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/app-icon.png")).unwrap_or_default();
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/app-icon.png"))
+        .unwrap_or_default();
 
     let opts = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
@@ -8,7 +9,7 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([580.0, 100.0])
             .with_max_inner_size([580.0, 99999.0])
             .with_resizable(true)
-            .with_app_id("org.artzert.Hashman")
+            .with_app_id("io.github.Artzert2215.Hashman")
             .with_icon(icon),
         ..Default::default()
     };
@@ -40,4 +41,6 @@ impl eframe::App for Shell {
 }
 
 #[cfg(not(feature = "gui"))]
-fn main() {println!("Hashman was built without the GUI. Build with `--features gui` to get a window.");}
+fn main() {
+    println!("Hashman was built without the GUI. Build with `--features gui` to get a window.");
+}

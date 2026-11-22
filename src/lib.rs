@@ -3,9 +3,9 @@ pub mod manifest;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 #[cfg(all(target_os = "linux", feature = "gui"))]
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
@@ -52,7 +52,7 @@ fn gb(n: u64) -> String {
 
 /// The Hashman application.
 pub struct App {
-	#[cfg(not(all(target_os = "linux", feature = "gui")))]
+    #[cfg(not(all(target_os = "linux", feature = "gui")))]
     file_dialog: FileDialog,
     #[cfg(all(target_os = "linux", feature = "gui"))]
     portal_pick: Option<Receiver<Option<std::path::PathBuf>>>,
@@ -73,7 +73,7 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         Self {
-			#[cfg(not(all(target_os = "linux", feature = "gui")))]
+            #[cfg(not(all(target_os = "linux", feature = "gui")))]
             file_dialog: FileDialog::new(),
             #[cfg(all(target_os = "linux", feature = "gui"))]
             portal_pick: None,
@@ -148,11 +148,14 @@ impl App {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         #[cfg(all(target_os = "linux", feature = "gui"))]
         {
-            let picked = self.portal_pick.as_ref().and_then(|rx| match rx.try_recv() {
-                Ok(path) => Some(path),
-                Err(std::sync::mpsc::TryRecvError::Empty) => None,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
-            });
+            let picked = self
+                .portal_pick
+                .as_ref()
+                .and_then(|rx| match rx.try_recv() {
+                    Ok(path) => Some(path),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
+                });
             if let Some(path) = picked {
                 self.portal_pick = None;
                 if let Some(path) = path {
@@ -187,11 +190,23 @@ impl App {
         let mut run = None::<Mode>;
         if !self.started {
             ui.horizontal(|ui| {
-                if ui.add(egui::Button::new(egui::RichText::new("Generate").size(btn_font_size)).min_size(btn_size)).clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("Generate").size(btn_font_size))
+                            .min_size(btn_size),
+                    )
+                    .clicked()
+                {
                     run = Some(Mode::Generate);
                 }
                 ui.add_space(12.0);
-                if ui.add(egui::Button::new(egui::RichText::new("Validate").size(btn_font_size)).min_size(btn_size)).clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("Validate").size(btn_font_size))
+                            .min_size(btn_size),
+                    )
+                    .clicked()
+                {
                     run = Some(Mode::Validate);
                 }
             });
@@ -224,12 +239,12 @@ impl App {
         //        ui.add_space(12.0);
         //        ui.add(egui::DragValue::new(&mut workers).range(1..=i32::MAX).speed(1.0));
         //    });
-        //    
+        //
         //    self.workers = workers.round() as i32;
         //    ui.add_space(6.0);
         //}
-        
-		if self.started {
+
+        if self.started {
             if !running {
                 if let Some(f) = &self.folder {
                     ui.horizontal(|ui| {
@@ -248,7 +263,7 @@ impl App {
                     ui.add_space(6.0);
                 }
             }
-		}
+        }
 
         // --- Progress ------------------------------------------------------------------
         if running {
@@ -264,7 +279,12 @@ impl App {
             if let Some(t0) = self.t0 {
                 let secs = t0.elapsed().as_secs_f64();
                 if secs > 1.0 && done > 0 {
-                    ui.add(egui::ProgressBar::new(f).text(format!("{} / {} ∙ {:.1} MB/s", gb(done), gb(total), done as f64 / secs / 1e6)));
+                    ui.add(egui::ProgressBar::new(f).text(format!(
+                        "{} / {} ∙ {:.1} MB/s",
+                        gb(done),
+                        gb(total),
+                        done as f64 / secs / 1e6
+                    )));
                 } else {
                     ui.add(egui::ProgressBar::new(f).text(format!("{} / {}", gb(done), gb(total))));
                 }
@@ -295,17 +315,20 @@ impl App {
             if let Some(r) = self.job.result.lock().unwrap().as_ref() {
                 match r {
                     JobResult::Generate { files, unreadable } => {
-                        let text_color = if unreadable.len() > 0 {
+                        let text_color = if !unreadable.is_empty() {
                             egui::Color32::RED
                         } else {
                             egui::Color32::GREEN
                         };
-                        ui.label(egui::RichText::new(format!(
-                            "Manifest created: {} file{} hashed ({} unreadable)",
-                            files,
-                            if *files != 1 { "s" } else { "" },
-                            unreadable.len(),
-                        )).color(text_color));
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Manifest created: {} file{} hashed ({} unreadable)",
+                                files,
+                                if *files != 1 { "s" } else { "" },
+                                unreadable.len(),
+                            ))
+                            .color(text_color),
+                        );
                         ui.add_space(6.0);
                         self.show_list(ui, "Could not read", unreadable);
                     }
@@ -316,20 +339,27 @@ impl App {
                         extra,
                         unreadable,
                     } => {
-                        let text_color = if bad.len() == 0 && missing.len() == 0 && unreadable.len() == 0 && extra.len() == 0 {
+                        let text_color = if bad.is_empty()
+                            && missing.is_empty()
+                            && unreadable.is_empty()
+                            && extra.is_empty()
+                        {
                             egui::Color32::GREEN
                         } else {
                             egui::Color32::RED
                         };
-                        ui.label(egui::RichText::new(format!(
-                            "Checked {} file{}: {} bad, {} missing, {} unreadable, {} extra",
-                            checked,
-                            if *checked != 1 { "s" } else { "" },
-                            bad.len(),
-                            missing.len(),
-                            unreadable.len(),
-                            extra.len(),
-                        )).color(text_color));
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Checked {} file{}: {} bad, {} missing, {} unreadable, {} extra",
+                                checked,
+                                if *checked != 1 { "s" } else { "" },
+                                bad.len(),
+                                missing.len(),
+                                unreadable.len(),
+                                extra.len(),
+                            ))
+                            .color(text_color),
+                        );
                         ui.add_space(6.0);
                         self.show_list(ui, "Changed or corrupt", bad);
                         self.show_list(ui, "Missing", missing);

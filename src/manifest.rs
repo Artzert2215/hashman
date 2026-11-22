@@ -1,5 +1,4 @@
 use rayon::prelude::*;
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::File;
@@ -12,8 +11,7 @@ const CHUNK: usize = 4 * 1024 * 1024;
 
 pub type OnBytes<'a> = &'a (dyn Fn(u64) + Sync);
 
-#[derive(Serialize, Debug)]
-#[serde(tag = "mode", rename_all = "lowercase")]
+#[derive(Debug)]
 pub enum JobResult {
     Generate {
         files: usize,
@@ -201,12 +199,20 @@ mod tests {
 
         generate(&d, 2, &noop).unwrap();
         let m = fs::read_to_string(d.join(MANIFEST)).unwrap();
-        assert!(m.contains("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  a.txt"));
+        assert!(
+            m.contains("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  a.txt")
+        );
         assert!(m.contains("  sub dir/b.bin"));
         assert!(!m.contains(MANIFEST));
 
         match validate(&d, 2, &noop).unwrap() {
-            JobResult::Validate { checked, bad, missing, extra, .. } => {
+            JobResult::Validate {
+                checked,
+                bad,
+                missing,
+                extra,
+                ..
+            } => {
                 assert_eq!(checked, 2);
                 assert!(bad.is_empty() && missing.is_empty() && extra.is_empty());
             }
@@ -228,7 +234,12 @@ mod tests {
         fs::write(d.join("new.txt"), b"x").unwrap();
 
         match validate(&d, 1, &noop).unwrap() {
-            JobResult::Validate { bad, missing, extra, .. } => {
+            JobResult::Validate {
+                bad,
+                missing,
+                extra,
+                ..
+            } => {
                 assert_eq!(bad, vec!["a.txt"]);
                 assert_eq!(missing, vec!["b.txt"]);
                 assert_eq!(extra, vec!["new.txt"]);

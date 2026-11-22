@@ -1,0 +1,20 @@
+<!-- WiX v4+. Build:
+     wix build packaging/windows/Package.wxs -arch x64 -d Version=1.2.3
+         -d PublishDir=<dir with hashman.exe> -d IconFile=<path to hashman.ico> -o Hashman.msi -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Hashman" Manufacturer="Artzert" Version="$(var.Version)"
+           UpgradeCode="B56F9F9C-2B9A-4BA5-A8BD-1E0A78D2A104" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Hashman is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="HashmanIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="HashmanIcon" />
+    <Feature Id="Main" Title="Hashman" Level="1">
+      <Files Include="$(var.PublishDir)\**" Directory="INSTALLFOLDER" />
+    </Feature>
+  </Package>
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Hashman" />
+    </StandardDirectory>
+  </Fragment>
+</Wix>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Artzert2215.Hashman</id>
+  <name>Hashman</name>
+  <summary>Generate and validate SHA-256 manifests for folders</summary>
+  <developer id="org.artzert">
+    <name>Artzert</name>
+  </developer>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+
+  <description>
+    <p>
+      Hashman is a basic hashing helper that either Generates a MANIFEST.sha256 file for a folder,
+      containing the SHA-256 of every file in it. Or it can validate a folder against
+      its MANIFEST.sha256, reporting changed, missing and extra files.
+    </p>
+    <p>
+      The manifest uses the standard "hash  relative/path" format, so it also works
+      with sha256sum -c.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.Artzert2215.Hashman.desktop</launchable>
+  <url type="homepage">https://github.com/Artzert2215/hashman</url>
+  <url type="bugtracker">https://github.com/Artzert2215/hashman/issues</url>
+  <provides>
+    <binary>hashman</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+
+
+  <releases>
+    <release version="1.0.0" date="2026-11-22"/>
+  </releases>
+
+  <!-- Flathub requires at least one screenshot:
+  <screenshots>
+    <screenshot type="default"><image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot.png</image></screenshot>
+  </screenshots>
+  -->
+</component>
