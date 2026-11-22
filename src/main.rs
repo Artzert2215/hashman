@@ -4,10 +4,10 @@ fn main() -> eframe::Result<()> {
 
     let opts = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([580.0, 560.0])
-            .with_min_inner_size([580.0, 560.0])
-			.with_max_inner_size([580.0, 560.0])
-			.with_resizable(false)
+            .with_inner_size([580.0, 100.0])
+            .with_min_inner_size([580.0, 100.0])
+            .with_max_inner_size([580.0, 99999.0])
+            .with_resizable(true)
             .with_app_id("org.artzert.Hashman")
             .with_icon(icon),
         ..Default::default()

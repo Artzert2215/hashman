@@ -182,20 +182,21 @@ impl App {
         let running = self.job.running.load(Ordering::Acquire);
 
         // --- Main actions --------------------------------------------------------
-		let btn_size = egui::vec2(272.0, 64.0);
-		let btn_font_size = 20.0;
+        let btn_size = egui::vec2(272.0, 64.0);
+        let btn_font_size = 20.0;
         let mut run = None::<Mode>;
-        ui.add_enabled_ui(!running, |ui| {
-			ui.horizontal(|ui| {
-				if ui.add(egui::Button::new(egui::RichText::new("Generate").size(btn_font_size)).min_size(btn_size)).clicked() {
-					run = Some(Mode::Generate);
-				}
-				ui.add_space(12.0);
-				if ui.add(egui::Button::new(egui::RichText::new("Validate").size(btn_font_size)).min_size(btn_size)).clicked() {
-					run = Some(Mode::Validate);
-				}
-			});
-        });
+        if !self.started {
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(egui::RichText::new("Generate").size(btn_font_size)).min_size(btn_size)).clicked() {
+                    run = Some(Mode::Generate);
+                }
+                ui.add_space(12.0);
+                if ui.add(egui::Button::new(egui::RichText::new("Validate").size(btn_font_size)).min_size(btn_size)).clicked() {
+                    run = Some(Mode::Validate);
+                }
+            });
+        }
+
         if let Some(m) = run {
             // Ask for the folder first; `start_job` runs once it is picked.
             self.pending = Some(m);
@@ -214,43 +215,61 @@ impl App {
             #[cfg(not(all(target_os = "linux", feature = "gui")))]
             self.file_dialog.pick_directory();
         }
-        ui.add_space(8.0);
 
         // --- Folder + parallelism -------------------------------------------------
-        let mut workers = self.workers as f32;
-        ui.add_enabled(
-            !running,
-            egui::DragValue::new(&mut workers).range(1..=i32::MAX).speed(1.0),
-        );
-        self.workers = workers.round() as i32;
-		ui.add_space(6.0);
-		
+        //let mut workers = self.workers as f32;
+        //if !self.started {
+        //    ui.horizontal(|ui| {
+        //        ui.label("Worker count:");
+        //        ui.add_space(12.0);
+        //        ui.add(egui::DragValue::new(&mut workers).range(1..=i32::MAX).speed(1.0));
+        //    });
+        //    
+        //    self.workers = workers.round() as i32;
+        //    ui.add_space(6.0);
+        //}
+        
 		if self.started {
-			if let Some(f) = &self.folder {
-				ui.label(format!("Folder: {}", f));
-				ui.add_space(2.0);
-			}
+            if !running {
+                if let Some(f) = &self.folder {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("Folder: {}", f));
+                        ui.add_space(5.0);
+                        if ui.add(egui::Button::new("New Operation")).clicked() {
+                            //reset state
+                            self.started = false;
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
+            } else {
+                if let Some(f) = &self.folder {
+                    ui.label(format!("Folder: {}", f));
+                    ui.add_space(6.0);
+                }
+            }
 		}
-        ui.add_space(10.0);
 
         // --- Progress ------------------------------------------------------------------
         if running {
             let total = self.job.total.load(Ordering::Relaxed);
             let done = self.job.done.load(Ordering::Relaxed);
-            ui.add_space(6.0);
 
             let f = if total > 0 {
                 done as f32 / total as f32
             } else {
                 0.0
             };
-            ui.add(egui::ProgressBar::new(f).text(format!("{} / {}", gb(done), gb(total))));
 
             if let Some(t0) = self.t0 {
                 let secs = t0.elapsed().as_secs_f64();
                 if secs > 1.0 && done > 0 {
-                    ui.label(format!("{:.1} MB/s", done as f64 / secs / 1e6));
+                    ui.add(egui::ProgressBar::new(f).text(format!("{} / {} ∙ {:.1} MB/s", gb(done), gb(total), done as f64 / secs / 1e6)));
+                } else {
+                    ui.add(egui::ProgressBar::new(f).text(format!("{} / {}", gb(done), gb(total))));
                 }
+            } else {
+                ui.add(egui::ProgressBar::new(f).text(format!("{} / {}", gb(done), gb(total))));
             }
             ui.add_space(6.0);
             ui.request_repaint();
@@ -258,7 +277,6 @@ impl App {
 
         // --- Result ----------------------------------------------------------------------
         if !running && self.started {
-            ui.add_space(8.0);
             egui::ScrollArea::vertical()
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
@@ -270,19 +288,24 @@ impl App {
     fn show_result(&self, ui: &mut egui::Ui) {
         {
             if let Some(e) = self.job.error.lock().unwrap().as_ref() {
-                ui.label(format!("Error: {}", e));
+                ui.label(egui::RichText::new(format!("Error: {}", e)).color(egui::Color32::RED));
                 ui.add_space(10.0);
             }
 
             if let Some(r) = self.job.result.lock().unwrap().as_ref() {
                 match r {
                     JobResult::Generate { files, unreadable } => {
-                        ui.label(format!(
+                        let text_color = if unreadable.len() > 0 {
+                            egui::Color32::RED
+                        } else {
+                            egui::Color32::GREEN
+                        };
+                        ui.label(egui::RichText::new(format!(
                             "Manifest created: {} file{} hashed ({} unreadable)",
                             files,
                             if *files != 1 { "s" } else { "" },
                             unreadable.len(),
-                        ));
+                        )).color(text_color));
                         ui.add_space(6.0);
                         self.show_list(ui, "Could not read", unreadable);
                     }
@@ -293,7 +316,12 @@ impl App {
                         extra,
                         unreadable,
                     } => {
-                        ui.label(format!(
+                        let text_color = if bad.len() == 0 && missing.len() == 0 && unreadable.len() == 0 && extra.len() == 0 {
+                            egui::Color32::GREEN
+                        } else {
+                            egui::Color32::RED
+                        };
+                        ui.label(egui::RichText::new(format!(
                             "Checked {} file{}: {} bad, {} missing, {} unreadable, {} extra",
                             checked,
                             if *checked != 1 { "s" } else { "" },
@@ -301,7 +329,7 @@ impl App {
                             missing.len(),
                             unreadable.len(),
                             extra.len(),
-                        ));
+                        )).color(text_color));
                         ui.add_space(6.0);
                         self.show_list(ui, "Changed or corrupt", bad);
                         self.show_list(ui, "Missing", missing);
@@ -318,7 +346,10 @@ impl App {
             return;
         }
         ui.add_space(4.0);
-        ui.label(format!("{} ({} entries)", label, items.len()));
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("{} ({} entries)", label, items.len())).strong());
+            ui.add(egui::Separator::default().horizontal());
+        });
         ui.add_space(2.0);
         for item in items.iter().take(200) {
             ui.label(item);
