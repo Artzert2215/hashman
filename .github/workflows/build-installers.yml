@@ -92,10 +92,10 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN=1 ./linuxdeploy.AppImage \
             --appdir AppDir \
             --executable target/release/hashman \
-            --desktop-file packaging/linux/org.artzert.Hashman.desktop \
-            --icon-file packaging/linux/org.artzert.Hashman.png
-          install -Dm644 packaging/linux/org.artzert.Hashman.metainfo.xml \
-            AppDir/usr/share/metainfo/org.artzert.Hashman.metainfo.xml
+            --desktop-file packaging/linux/io.github.Artzert2215.Hashman.desktop \
+            --icon-file packaging/linux/io.github.Artzert2215.Hashman.png
+          install -Dm644 packaging/linux/io.github.Artzert2215.Hashman.metainfo.xml \
+            AppDir/usr/share/metainfo/io.github.Artzert2215.Hashman.metainfo.xml
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool.AppImage AppDir dist/Hashman-x86_64.AppImage
           chmod +x dist/Hashman-x86_64.AppImage
 
@@ -111,8 +111,8 @@ jobs:
             org.freedesktop.Sdk.Extension.rust-stable//26.08
           bash packaging/scripts/flatpak-prepare.sh
           flatpak-builder --force-clean --repo=.flatpak-builder/repo flatpak-build \
-            packaging/flatpak/org.artzert.Hashman.yml
-          flatpak build-bundle .flatpak-builder/repo dist/Hashman.flatpak org.artzert.Hashman
+            packaging/flatpak/io.github.Artzert2215.Hashman.yml
+          flatpak build-bundle .flatpak-builder/repo dist/Hashman.flatpak io.github.Artzert2215.Hashman
 
       # macOS -----------------------------------------------------------------
       - name: Build macOS universal binaries
