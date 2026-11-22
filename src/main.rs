@@ -5,7 +5,9 @@ fn main() -> eframe::Result<()> {
     let opts = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([580.0, 560.0])
-            .with_min_inner_size([460.0, 420.0])
+            .with_min_inner_size([580.0, 560.0])
+			.with_max_inner_size([580.0, 560.0])
+			.with_resizable(false)
             .with_app_id("org.artzert.Hashman")
             .with_icon(icon),
         ..Default::default()

@@ -9,6 +9,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Instant;
 
+#[cfg(not(all(target_os = "linux", feature = "gui")))]
 use egui_file_dialog::FileDialog;
 use manifest::JobResult;
 
@@ -51,11 +52,12 @@ fn gb(n: u64) -> String {
 
 /// The Hashman application.
 pub struct App {
+	#[cfg(not(all(target_os = "linux", feature = "gui")))]
     file_dialog: FileDialog,
     #[cfg(all(target_os = "linux", feature = "gui"))]
     portal_pick: Option<Receiver<Option<std::path::PathBuf>>>,
     folder: Option<String>,
-    workers: u32,
+    workers: i32,
     job: Arc<JobState>,
     started: bool,
     t0: Option<Instant>,
@@ -71,6 +73,7 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         Self {
+			#[cfg(not(all(target_os = "linux", feature = "gui")))]
             file_dialog: FileDialog::new(),
             #[cfg(all(target_os = "linux", feature = "gui"))]
             portal_pick: None,
@@ -175,24 +178,23 @@ impl App {
         }
 
         ui.add_space(12.0);
-        ui.heading("Hashman");
-        ui.add_space(4.0);
-        ui.label("Generate and validate SHA-256 manifests for a folder.");
-        ui.add_space(12.0);
 
         let running = self.job.running.load(Ordering::Acquire);
 
         // --- Main actions --------------------------------------------------------
-        // `add_enabled_ui` disables the whole group while a job runs.
+		let btn_size = egui::vec2(272.0, 64.0);
+		let btn_font_size = 20.0;
         let mut run = None::<Mode>;
         ui.add_enabled_ui(!running, |ui| {
-            if ui.button("Generate").clicked() {
-                run = Some(Mode::Generate);
-            }
-            ui.add_space(12.0);
-            if ui.button("Validate").clicked() {
-                run = Some(Mode::Validate);
-            }
+			ui.horizontal(|ui| {
+				if ui.add(egui::Button::new(egui::RichText::new("Generate").size(btn_font_size)).min_size(btn_size)).clicked() {
+					run = Some(Mode::Generate);
+				}
+				ui.add_space(12.0);
+				if ui.add(egui::Button::new(egui::RichText::new("Validate").size(btn_font_size)).min_size(btn_size)).clicked() {
+					run = Some(Mode::Validate);
+				}
+			});
         });
         if let Some(m) = run {
             // Ask for the folder first; `start_job` runs once it is picked.
@@ -204,7 +206,7 @@ impl App {
                 // Run the synchronous portal picker off the UI thread.
                 thread::spawn(move || {
                     let selected = rfd::FileDialog::new()
-                        .set_title("Choose a folder to hash")
+                        .set_title("Choose a folder")
                         .pick_folder();
                     let _ = tx.send(selected);
                 });
@@ -215,23 +217,20 @@ impl App {
         ui.add_space(8.0);
 
         // --- Folder + parallelism -------------------------------------------------
-        if let Some(f) = &self.folder {
-            ui.label(format!("Folder: {}", f));
-            ui.add_space(2.0);
-        } else {
-            ui.label("Click Generate or Validate to choose a folder.");
-            ui.add_space(2.0);
-        }
-
         let mut workers = self.workers as f32;
         ui.add_enabled(
             !running,
-            egui::widgets::Slider::new(&mut workers, 1.0..=8.0).text("Workers"),
+            egui::DragValue::new(&mut workers).range(1..=i32::MAX).speed(1.0),
         );
-        self.workers = workers.round() as u32;
-        ui.add_space(6.0);
-
-        ui.label("The manifest is saved as MANIFEST.sha256 inside the folder.");
+        self.workers = workers.round() as i32;
+		ui.add_space(6.0);
+		
+		if self.started {
+			if let Some(f) = &self.folder {
+				ui.label(format!("Folder: {}", f));
+				ui.add_space(2.0);
+			}
+		}
         ui.add_space(10.0);
 
         // --- Progress ------------------------------------------------------------------

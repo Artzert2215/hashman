@@ -26,21 +26,17 @@ No display or X11/Wayland libraries are needed for this.
 
 Requires egui's native backend deps for your OS:
 
-- **Linux**: X11/Wayland dev libs
-  `libgtk-3-dev libxkbcommon-dev librsvg2-dev libwebp-dev`.
+- **Linux**: X11/Wayland dev libs.
   ```bash
   cargo build --features gui --release
-  ./target/release/hashman
   ```
-- **macOS**: just Xcode (Cocoa is linked by eframe).
+- **macOS**: Xcode.
   ```bash
   cargo build --features gui --release
-  ./target/release/hashman
   ```
-- **Windows**: MSVC toolchain (default on GitHub Actions / MSVC).
+- **Windows**: MSVC toolchain.
   ```bash
   cargo build --features gui --release
-  target\x86_64-pc-windows-msvc\release\hashman.exe
   ```
 
 ## Running the tests
