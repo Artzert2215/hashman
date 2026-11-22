@@ -209,7 +209,7 @@ jobs:
             test -f "dist/$f"
           done
           cd dist && sha256sum Hashman* > SHA256SUMS && cat SHA256SUMS
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           draft: true
           generate_release_notes: true
