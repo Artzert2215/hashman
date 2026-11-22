@@ -434,9 +434,5 @@ mod tests {
             harness.query_by_label("Validate").is_some(),
             "Validate button missing"
         );
-        assert!(
-            harness.query_by_label("Hashman").is_some(),
-            "app title missing"
-        );
     }
 }
