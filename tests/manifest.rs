@@ -531,6 +531,7 @@ fn binary_mode_entry_with_double_space_in_path() {
     assert_clean(&r);
 }
 
+#[cfg(not(windows))]
 #[test]
 fn text_mode_path_starting_with_star() {
     let d = TempDir::new().unwrap();
