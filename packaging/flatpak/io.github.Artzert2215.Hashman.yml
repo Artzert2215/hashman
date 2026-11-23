@@ -1,12 +1,3 @@
-# Builds Hashman from source inside the Flatpak sandbox (offline, from Cargo.lock).
-#
-# Needs a generated cargo-sources.json next to this file:
-#   packaging/scripts/flatpak-prepare.sh        (CI does this automatically)
-#
-# Local build:
-#   flatpak-builder --user --install --force-clean --install-deps-from=flathub \
-#       build-dir packaging/flatpak/io.github.Artzert2215.Hashman.yml
-#   flatpak run io.github.Artzert2215.Hashman
 app-id: io.github.Artzert2215.Hashman
 runtime: org.freedesktop.Platform
 runtime-version: '26.08'
@@ -20,9 +11,6 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
-  # No --filesystem permission on purpose: the folder is chosen through the
-  # xdg-desktop-portal file chooser (rfd's `xdg-portal` backend), which grants
-  # access to just that folder.
 
 modules:
   - name: hashman

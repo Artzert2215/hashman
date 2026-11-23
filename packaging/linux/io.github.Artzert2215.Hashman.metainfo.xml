@@ -35,12 +35,26 @@
 
 
   <releases>
+    <release version="1.0.1" date="2026-11-23"/>
     <release version="1.0.0" date="2026-11-22"/>
   </releases>
 
-  <!-- Flathub requires at least one screenshot:
   <screenshots>
-    <screenshot type="default"><image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot.png</image></screenshot>
+    <screenshot>
+		<caption>Main menu: Generate or Validate</caption>
+		<image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot1.png</image>
+	</screenshot>
+	<screenshot>
+		<caption>Hashing in progress</caption>
+		<image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot2.png</image>
+	</screenshot>
+	<screenshot>
+		<caption>Validation results (good)</caption>
+		<image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot3.png</image>
+	</screenshot>
+	<screenshot type="default">
+		<caption>Validation results (bad)</caption>
+		<image>https://raw.githubusercontent.com/Artzert2215/hashman/main/assets/screenshot4.png</image>
+	</screenshot>
   </screenshots>
-  -->
 </component>
