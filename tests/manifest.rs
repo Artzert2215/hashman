@@ -44,7 +44,7 @@ struct Report {
     missing: Vec<String>,
     extra: Vec<String>,
     unreadable: Vec<String>,
-	#[cfg_attr(not(unix), allow(dead_code))] // atm only used by unix tests
+    #[cfg_attr(not(unix), allow(dead_code))] // atm only used by unix tests
     symlinks: usize,
 }
 
@@ -387,7 +387,7 @@ fn lock_dir(dir: &Path) -> Option<impl FnOnce()> {
 #[cfg(unix)]
 #[test]
 fn unreadable_directory_is_reported_not_silently_skipped() {
-	use hashman::manifest::scan;
+    use hashman::manifest::scan;
     let d = TempDir::new().unwrap();
     write(d.path(), "ok.txt", b"abc");
     write(d.path(), "locked/secret.txt", b"abc");
