@@ -3,12 +3,10 @@
 //! These exercise only the public API (`hashman::manifest`), so they need no
 //! display server or GUI libraries and run with `cargo test --no-default-features`.
 //!
-//! Tests marked `#[ignore = "..."]` describe *desired* behaviour that the current
-//! implementation does not have yet (each was run against the current code and fails). Run them
-//! with `cargo test -- --ignored` to see the open gaps; remove the attribute as
-//! each gap is fixed.
 
-use hashman::manifest::{generate, list_files, validate, JobResult, MANIFEST};
+use hashman::manifest::{
+    generate, generate_with, list_files, scan, validate, validate_with, JobResult, MANIFEST,
+};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
@@ -46,6 +44,7 @@ struct Report {
     missing: Vec<String>,
     extra: Vec<String>,
     unreadable: Vec<String>,
+    symlinks: usize,
 }
 
 fn run_validate(root: &Path) -> Report {
@@ -56,12 +55,14 @@ fn run_validate(root: &Path) -> Report {
             missing,
             extra,
             unreadable,
+            symlinks,
         } => Report {
             checked,
             bad,
             missing,
             extra,
             unreadable,
+            symlinks,
         },
         other => panic!("expected Validate result, got {other:?}"),
     }
@@ -130,7 +131,9 @@ fn generate_writes_sha256sum_compatible_lines() {
 fn generate_on_empty_folder_creates_empty_manifest_and_validates() {
     let d = TempDir::new().unwrap();
     match generate(d.path(), 1, &noop).unwrap() {
-        JobResult::Generate { files, unreadable } => {
+        JobResult::Generate {
+            files, unreadable, ..
+        } => {
             assert_eq!(files, 0);
             assert!(unreadable.is_empty());
         }
@@ -332,7 +335,7 @@ fn validate_ignores_nested_manifest_names_only_at_root() {
 
 #[cfg(unix)]
 #[test]
-fn symlinks_are_not_followed_and_are_currently_skipped() {
+fn symlinks_are_not_followed_and_are_counted() {
     use std::os::unix::fs::symlink;
     let d = TempDir::new().unwrap();
     write(d.path(), "real.txt", b"abc");
@@ -340,8 +343,14 @@ fn symlinks_are_not_followed_and_are_currently_skipped() {
     symlink(d.path(), d.path().join("loop")).unwrap(); // must not recurse forever
 
     generate(d.path(), 1, &noop).unwrap();
-    // Documents today's behaviour: symlinks silently do not appear in the manifest.
+    // Symlinks are never followed or recorded...
     assert_eq!(read_manifest(d.path()), format!("{ABC_SHA256}  real.txt\n"));
+    // ...but they are counted so the UI can say they were skipped.
+    match generate(d.path(), 1, &noop).unwrap() {
+        JobResult::Generate { symlinks, .. } => assert_eq!(symlinks, 2),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(run_validate(d.path()).symlinks, 2);
 }
 
 #[test]
@@ -359,6 +368,157 @@ fn malformed_manifest_lines_are_reported() {
     );
 }
 
+/// chmod 000 a directory; returns `None` (test should be skipped) when the current user can
+/// still read it anyway, i.e. when running as root.
+#[cfg(unix)]
+fn lock_dir(dir: &Path) -> Option<impl FnOnce()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(dir, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read_dir(dir).is_ok() {
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap();
+        eprintln!("skipped: running as a user that ignores directory permissions (root?)");
+        return None;
+    }
+    let dir = dir.to_path_buf();
+    Some(move || fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap())
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_directory_is_reported_not_silently_skipped() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "ok.txt", b"abc");
+    write(d.path(), "locked/secret.txt", b"abc");
+    let Some(unlock) = lock_dir(&d.path().join("locked")) else {
+        return;
+    };
+
+    let result = generate(d.path(), 1, &noop);
+    let s = scan(d.path());
+    unlock();
+
+    match result.unwrap() {
+        JobResult::Generate {
+            files, unreadable, ..
+        } => {
+            assert_eq!(files, 1);
+            assert_eq!(unreadable, vec!["locked"]);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(s.unreadable, vec!["locked"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn files_under_an_unreadable_directory_are_unreadable_not_missing() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "ok.txt", b"abc");
+    write(d.path(), "locked/secret.txt", b"abc");
+    generate(d.path(), 1, &noop).unwrap();
+    let Some(unlock) = lock_dir(&d.path().join("locked")) else {
+        return;
+    };
+
+    let r = run_validate(d.path());
+    unlock();
+
+    assert!(r.missing.is_empty(), "missing: {:?}", r.missing);
+    assert_eq!(r.unreadable, vec!["locked"]);
+    assert_eq!(r.checked, 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn file_names_that_are_not_utf8_are_reported_not_mangled() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let d = TempDir::new().unwrap();
+    write(d.path(), "ok.txt", b"abc");
+    let bad_name = OsStr::from_bytes(b"bad-\xff-name.txt");
+    fs::write(d.path().join(bad_name), b"abc").unwrap();
+
+    match generate(d.path(), 1, &noop).unwrap() {
+        JobResult::Generate {
+            files, unreadable, ..
+        } => {
+            assert_eq!(files, 1);
+            assert_eq!(unreadable.len(), 1);
+            assert!(unreadable[0].starts_with("bad-"));
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(read_manifest(d.path()), format!("{ABC_SHA256}  ok.txt\n"));
+}
+
+// --- strict manifest parsing -------------------------------------------------------
+
+#[test]
+fn malformed_manifest_error_names_the_line() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "a.txt", b"abc");
+    fs::write(
+        d.path().join(MANIFEST),
+        format!("{ABC_SHA256}  a.txt\nfine? no\n"),
+    )
+    .unwrap();
+    let err = validate(d.path(), 1, &noop).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("line 2"), "{err}");
+}
+
+#[test]
+fn malformed_variants_are_all_rejected() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "a.txt", b"abc");
+    let short = &ABC_SHA256[..63];
+    let long = format!("{ABC_SHA256}0");
+    let nonhex = format!("{}g", &ABC_SHA256[..63]);
+    for bad in [
+        format!("{short}  a.txt"),     // hash too short
+        format!("{long}  a.txt"),      // hash too long
+        format!("{nonhex}  a.txt"),    // not hex
+        format!("{ABC_SHA256} a.txt"), // single space, no `*`
+        format!("{ABC_SHA256}  "),     // no path
+        ABC_SHA256.to_string(),        // no separator
+    ] {
+        fs::write(d.path().join(MANIFEST), format!("{bad}\n")).unwrap();
+        assert!(validate(d.path(), 1, &noop).is_err(), "accepted: {bad:?}");
+    }
+}
+
+#[test]
+fn non_utf8_manifest_is_an_error_not_a_crash() {
+    let d = TempDir::new().unwrap();
+    fs::write(d.path().join(MANIFEST), b"\xff\xfe\xfd\n").unwrap();
+    assert!(validate(d.path(), 1, &noop).is_err());
+}
+
+#[test]
+fn identical_duplicate_entries_are_harmless() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "a.txt", b"abc");
+    fs::write(
+        d.path().join(MANIFEST),
+        format!("{ABC_SHA256}  a.txt\n{ABC_SHA256}  a.txt\n"),
+    )
+    .unwrap();
+    assert_clean(&run_validate(d.path()));
+}
+
+#[test]
+fn conflicting_duplicate_entries_are_an_error() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "a.txt", b"abc");
+    fs::write(
+        d.path().join(MANIFEST),
+        format!("{EMPTY_SHA256}  a.txt\n{ABC_SHA256}  a.txt\n"),
+    )
+    .unwrap();
+    let err = validate(d.path(), 1, &noop).unwrap_err();
+    assert!(err.to_string().contains("a.txt"), "{err}");
+}
+
 #[test]
 fn binary_mode_entry_with_double_space_in_path() {
     let d = TempDir::new().unwrap();
@@ -367,6 +527,18 @@ fn binary_mode_entry_with_double_space_in_path() {
     let r = run_validate(d.path());
     assert_eq!(r.checked, 1);
     assert_clean(&r);
+}
+
+#[test]
+fn text_mode_path_starting_with_star() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "*star.txt", b"abc");
+    fs::write(
+        d.path().join(MANIFEST),
+        format!("{ABC_SHA256}  *star.txt\n"),
+    )
+    .unwrap();
+    assert_clean(&run_validate(d.path()));
 }
 
 #[test]
@@ -381,41 +553,59 @@ fn manifest_with_utf8_bom_is_accepted() {
     assert_clean(&run_validate(d.path()));
 }
 
+// --- progress totals, atomic writes ------------------------------------------------
+
 #[test]
-fn duplicate_manifest_entries_are_not_silently_merged() {
+fn generate_reports_total_before_hashing_and_matches_bytes_read() {
     let d = TempDir::new().unwrap();
-    write(d.path(), "a.txt", b"abc");
-    fs::write(
-        d.path().join(MANIFEST),
-        format!("{EMPTY_SHA256}  a.txt\n{ABC_SHA256}  a.txt\n"),
-    )
+    write(d.path(), "a", &vec![1u8; 70_000]);
+    write(d.path(), "b/c", &vec![2u8; 30_000]);
+
+    let total = AtomicU64::new(0);
+    let done = AtomicU64::new(0);
+    let saw_total_first = std::sync::atomic::AtomicBool::new(true);
+    generate_with(d.path(), 2, &|n| total.store(n, Ordering::SeqCst), &|n| {
+        if total.load(Ordering::SeqCst) == 0 {
+            saw_total_first.store(false, Ordering::SeqCst);
+        }
+        done.fetch_add(n, Ordering::SeqCst);
+    })
     .unwrap();
-    let r = validate(d.path(), 1, &noop);
-    assert!(
-        r.is_err(),
-        "conflicting duplicate entries should be an error"
+    assert!(saw_total_first.load(Ordering::SeqCst));
+    assert_eq!(total.load(Ordering::SeqCst), 100_000);
+    assert_eq!(done.load(Ordering::SeqCst), 100_000);
+}
+
+#[test]
+fn validate_total_counts_only_files_that_are_checked() {
+    let d = TempDir::new().unwrap();
+    write(d.path(), "a", &vec![1u8; 1000]);
+    generate(d.path(), 1, &noop).unwrap();
+    write(d.path(), "extra_big", &vec![9u8; 500_000]); // not in manifest: must not be counted
+
+    let total = AtomicU64::new(0);
+    let done = AtomicU64::new(0);
+    let r = validate_with(d.path(), 1, &|n| total.store(n, Ordering::SeqCst), &|n| {
+        done.fetch_add(n, Ordering::SeqCst);
+    })
+    .unwrap();
+    assert!(matches!(r, JobResult::Validate { .. }));
+    assert_eq!(total.load(Ordering::SeqCst), 1000);
+    assert_eq!(
+        done.load(Ordering::SeqCst),
+        total.load(Ordering::SeqCst),
+        "progress must be able to reach 100%"
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn unreadable_directory_is_reported_not_silently_skipped() {
-    use std::os::unix::fs::PermissionsExt;
+fn generate_leaves_no_temp_file_and_ignores_a_stale_one() {
     let d = TempDir::new().unwrap();
-    write(d.path(), "ok.txt", b"abc");
-    write(d.path(), "locked/secret.txt", b"abc");
-    let locked = d.path().join("locked");
-    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    write(d.path(), "a.txt", b"abc");
+    fs::write(d.path().join("MANIFEST.sha256.tmp"), "stale").unwrap();
 
-    let result = generate(d.path(), 1, &noop);
-    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    generate(d.path(), 1, &noop).unwrap();
 
-    match result {
-        Ok(JobResult::Generate { unreadable, .. }) => assert!(
-            unreadable.iter().any(|p| p.starts_with("locked")),
-            "locked/ contents must show up as unreadable, got {unreadable:?}"
-        ),
-        Ok(other) => panic!("{other:?}"),
-        Err(_) => {} // failing outright is also acceptable
-    }
+    assert!(!d.path().join("MANIFEST.sha256.tmp").exists());
+    assert_eq!(read_manifest(d.path()), format!("{ABC_SHA256}  a.txt\n"));
 }
