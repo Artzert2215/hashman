@@ -5,7 +5,7 @@
 //!
 
 use hashman::manifest::{
-    generate, generate_with, list_files, scan, validate, validate_with, JobResult, MANIFEST,
+    generate, generate_with, list_files, validate, validate_with, JobResult, MANIFEST,
 };
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -44,6 +44,7 @@ struct Report {
     missing: Vec<String>,
     extra: Vec<String>,
     unreadable: Vec<String>,
+	#[cfg_attr(not(unix), allow(dead_code))] // atm only used by unix tests
     symlinks: usize,
 }
 
@@ -386,6 +387,7 @@ fn lock_dir(dir: &Path) -> Option<impl FnOnce()> {
 #[cfg(unix)]
 #[test]
 fn unreadable_directory_is_reported_not_silently_skipped() {
+	use hashman::manifest::scan;
     let d = TempDir::new().unwrap();
     write(d.path(), "ok.txt", b"abc");
     write(d.path(), "locked/secret.txt", b"abc");
@@ -428,7 +430,7 @@ fn files_under_an_unreadable_directory_are_unreadable_not_missing() {
     assert_eq!(r.checked, 1);
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 fn file_names_that_are_not_utf8_are_reported_not_mangled() {
     use std::ffi::OsStr;
