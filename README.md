@@ -1,56 +1,47 @@
 # Hashman
 
 > [!CAUTION]
-> This is WIP software, not recommended for use yet.
+> This software has not been tested on macOS or Windows.
 
 Small desktop app (Windows / macOS / Linux) with two buttons:
 
 - **Generate**: select a folder, the tool generates and writes `MANIFEST.sha256` into it.
-- **Validate**: select a folder with a `MANIFEST.sha256` file, the tool validates the manifest agains the files on disk.
+- **Validate**: select a folder with a `MANIFEST.sha256` file, the tool validates the manifest against the files on disk.
 
-The `MANIFEST.sha256` uses the standard `hash  relative/path` format.  
+The `MANIFEST.sha256` uses the standard `hash  relative/path` format, meaning `sha256sum -c MANIFEST.sha256` works too.
 Validation and generation may take a long time depending on file size, disk speed and cpu speed.
 
 ## Build locally
 
-### Core (headless)
-
-```bash
-cargo build        # builds the hashing lib + CLI-less stub
-cargo test         # runs the hashing unit tests + the headless UI render test
-```
-
-No display or X11/Wayland libraries are needed for this.
-
 ### Windowed app (egui/eframe)
 
-Requires egui's native backend deps for your OS:
+```bash
+cargo build --release
+```
 
-- **Linux**: X11/Wayland dev libs.
-  ```bash
-  cargo build --features gui --release
-  ```
-- **macOS**: Xcode.
-  ```bash
-  cargo build --features gui --release
-  ```
+This requires egui's deps for your OS:
+
+- **Linux**: X11/Wayland dev libraries.
+- **macOS**: Xcode command line tools.
 - **Windows**: MSVC toolchain.
-  ```bash
-  cargo build --features gui --release
-  ```
 
-## Running the tests
+## Running tests
 
 ```bash
-cargo test          # hashing + headless UI render test (egui_kittest)
-cargo test --lib    # lib only
-cargo test --features gui  # also type-checks main.rs
+cargo test --no-default-features
+cargo test # also runs the egui_kittest headless UI test
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
 ```
 
 ## Release builds
 
 | Platform | Artifact |
 |----------|----------|
-| macOS    | universal `.dmg` |
-| Linux    | `hashman-linux.tar.gz` (binary + bundled shared libs) |
-| Windows  | `hashman-windows.zip` (`hashman.exe`) |
+| macOS    | universal `Hashman.dmg` |
+| Linux    | `Hashman-x86_64.AppImage` and `Hashman.flatpak` |
+| Windows  | `Hashman.msi` and `Hashman-Setup.exe` |
+
+## License
+
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-Apache), at your option.
